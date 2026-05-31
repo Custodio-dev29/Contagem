@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scanner Petrifilm Local</title>
+<style>
+body { font-family: Arial, sans-serif; text-align: center; background-color: #f4f4f9; padding: 20px; margin: 0; }
+.container { max-width: 500px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+#resultado { font-size: 20px; font-weight: bold; color: #d9534f; margin: 15px 0; }
+canvas { max-width: 100%; height: auto; border-radius: 8px; margin-top: 15px; }
+.btn { background-color: #0275d8; color: white; padding: 12px 20px; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; margin: 10px; }
+.btn:disabled { background-color: #ccc; cursor: not-allowed; }
+#status { color: #777; font-style: italic; }
+</style>
+</head>
+<body>
+
+<div class="container">
+<h2>Contador de Colônias Petrifilm</h2>
+<p id="status">Baixando OpenCV.js do servidor da Intel (aguarde)...</p>
+
+<input type="file" id="fileInput" accept="image/*" capture="environment" style="display: none;">
+<button class="btn" id="captureBtn" disabled>Carregando...</button>
+
+<div id="resultado"></div>
+
+<img id="imageSrc" style="display:none;" />
+
+<canvas id="canvasOutput"></canvas>
+</div>
+
+<script async src="https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.6.0.1/dist/opencv.js" type="text/javascript"></script>
+
+<script>
+const fileInput = document.getElementById('fileInput');
+const captureBtn = document.getElementById('captureBtn');
+const statusText = document.getElementById('status');
+const resultadoDiv = document.getElementById('resultado');
+const imageSrc = document.getElementById('imageSrc');
+
+// Monitora quando o OpenCV terminar de carregar na memória do navegador
+var Module = {
+onRuntimeInitialized: function() {
+statusText.innerText = "Pronto! Pode tirar a foto.";
+statusText.style.color = "green";
+captureBtn.innerText = "Tirar Foto / Galeria";
+captureBtn.disabled = false;
+}
+};
+
+captureBtn.addEventListener('click', () => fileInput.click());
+
+fileInput.addEventListener('change', (e) => {
+if (e.target.files.length === 0) return;
+
+statusText.innerText = "Processando imagem...";
+resultadoDiv.innerText = "";
+
+const reader = new FileReader();
+reader.onload = function(event) {
+imageSrc.src = event.target.result;
+};
+reader.readAsDataURL(e.target.files[0]);
+});
+
+// Executa a contagem assim que a imagem terminar de carregar no elemento oculto
+imageSrc.onload = function() {
+try {
+// 1. Inicializar as matrizes de imagem
+let src = cv.imread(imageSrc);
+let dst = src.clone();
+let gray = new cv.Mat();
+let blurred = new cv.Mat();
+let thresh = new cv.Mat();
+
+// 2. Converter para cinza e suavizar a textura azul
+cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
+cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
+
+// 3. Aplicar o limiar adaptativo
+cv.adaptiveThreshold(blurred, thresh, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 21, 4);
+
+// 4. Encontrar contornos
+let contours = new cv.MatVector();
+let hierarchy = new cv.Mat();
+cv.findContours(thresh, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+let contagem = 0;
+let corVerde = new cv.Scalar(0, 255, 0, 255);
+
+// 5. Filtrar por tamanho das colônias
+for (let i = 0; i < contours.size(); ++i) {
+let cnt = contours.get(i);
+let area = cv.contourArea(cnt);
+
+// Filtro de tamanho do pixel (ajustar caso sua foto seja em altíssima resolução)
+if (area > 5 && area < 300) {
+contagem++;
+let circle = cv.minEnclosingCircle(cnt);
+cv.circle(dst, circle.center, circle.radius + 3, corVerde, 2);
+}
+}
+
+// 6. Renderizar na tela
+cv.imshow('canvasOutput', dst);
+resultadoDiv.innerText = Colônias Detectadas: ${contagem};
+statusText.innerText = "Análise concluída com sucesso!";
+
+// 7. Liberar memória
+src.delete(); dst.delete(); gray.delete(); blurred.delete();
+thresh.delete(); contours.delete(); hierarchy.delete();
+
+} catch (err) {
+statusText.innerText = "Erro ao processar imagem. Tente tirar a foto mais de perto.";
+statusText.style.color = "red";
+console.error(err);
+}
+};
+</script>
+
+</body>
+</html>
